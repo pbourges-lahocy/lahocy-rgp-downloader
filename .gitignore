@@ -5,6 +5,7 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+/LahocyRGPDownloader-*.zip
 
 # Cache applicatif (catalogue de stations, voir cahier des charges §14)
 .cache/
