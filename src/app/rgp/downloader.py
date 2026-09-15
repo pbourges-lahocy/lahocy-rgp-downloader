@@ -8,6 +8,7 @@ nom RINEX standard plutôt qu'un nom générique (cahier des charges §8).
 
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,6 +28,21 @@ class DownloadedFile:
     @property
     def ok(self) -> bool:
         return self.error is None
+
+
+def has_enough_disk_space(destination: Path, required_bytes: int, safety_margin: float = 1.1) -> bool:
+    """Vérifie qu'il reste assez d'espace disque avant de lancer les téléchargements.
+
+    `destination` peut ne pas encore exister (dossier créé plus tard) : on vérifie
+    alors l'espace disponible sur son premier ancêtre existant.
+    """
+    probe = destination
+    while not probe.exists():
+        if probe.parent == probe:
+            break
+        probe = probe.parent
+    usage = shutil.disk_usage(probe)
+    return usage.free >= required_bytes * safety_margin
 
 
 def download_station_files(

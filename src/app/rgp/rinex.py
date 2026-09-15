@@ -12,11 +12,17 @@ Voir docs/RGP_IGN.md §6 pour la justification de ces choix.
 from __future__ import annotations
 
 import gzip
+import re
 import shutil
 from pathlib import Path
 
 import hatanaka
 import unlzw3
+
+# Nom RINEX 2 observation Hatanaka : ssssjjjh.aad (l'extension complète est ".aad",
+# pas ".d" — Path.suffix ne renvoie que ce qui suit le DERNIER point du nom de fichier,
+# donc un simple `.suffix == ".d"` ne matche jamais un nom RINEX 2 réel).
+_RINEX2_HATANAKA_SUFFIX_RE = re.compile(r"\.\d{2}d$", re.IGNORECASE)
 
 
 class RinexProcessingError(RuntimeError):
@@ -79,7 +85,7 @@ def process_downloaded_file(source: Path, output_dir: Path) -> Path:
     else:
         decompressed_path = source
 
-    is_hatanaka = decompressed_path.suffix.lower() in (".d", ".crx")
+    is_hatanaka = _is_hatanaka_filename(decompressed_path.name)
     if is_hatanaka:
         final_name = _rinex_observation_name(decompressed_path.name)
         final_path = output_dir / final_name
@@ -91,6 +97,11 @@ def process_downloaded_file(source: Path, output_dir: Path) -> Path:
     return decompressed_path
 
 
+def _is_hatanaka_filename(filename: str) -> bool:
+    """Détecte un fichier CRINEX/Hatanaka, RINEX 2 (ssssjjjh.aad) ou RINEX 3 (..._MO.crx)."""
+    return filename.lower().endswith(".crx") or bool(_RINEX2_HATANAKA_SUFFIX_RE.search(filename))
+
+
 def _rinex_observation_name(hatanaka_filename: str) -> str:
     """Déduit le nom RINEX observation standard à partir d'un nom CRINEX.
 
@@ -99,6 +110,6 @@ def _rinex_observation_name(hatanaka_filename: str) -> str:
     """
     if hatanaka_filename.lower().endswith(".crx"):
         return hatanaka_filename[: -len(".crx")] + ".rnx"
-    if hatanaka_filename[-1:].lower() == "d":
+    if _RINEX2_HATANAKA_SUFFIX_RE.search(hatanaka_filename):
         return hatanaka_filename[:-1] + "o"
     return hatanaka_filename

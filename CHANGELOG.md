@@ -4,6 +4,22 @@ Toutes les modifications notables de ce projet sont documentées ici.
 
 ## [Non publié]
 
+### Phase 3 — Téléchargement réel
+
+- `scripts/cli.py` (renommé depuis `prototype_cli.py`) : nouvelle option
+  `--download DOSSIER` déclenchant le téléchargement effectif des fichiers
+  disponibles/partiels vers `DOSSIER/RGP/AAAA-MM-JJ/STATION/`, avec décompression et
+  conversion Hatanaka → RINEX, puis écriture du rapport `rapport_RGP.txt`.
+- Module `app.rgp.report` : génération du rapport de téléchargement (cahier des
+  charges §10), avec avertissements consolidés (données partielles, cadence
+  alternative, fichier journalier de repli, erreurs de téléchargement).
+- Vérification de l'espace disque disponible avant de lancer les téléchargements
+  (`app.rgp.downloader.has_enough_disk_space`).
+- Correction d'un bug de détection des fichiers Hatanaka : `Path.suffix` sur un nom
+  RINEX 2 (`aaer257a.26d`) renvoie `.26d` et non `.d`, ce qui empêchait la conversion
+  CRINEX → RINEX de se déclencher. Détection corrigée par expression régulière et
+  validée par un téléchargement réel de bout en bout contre le serveur IGN.
+
 ### Phase 2 — Prototype fonctionnel
 
 - Ajout du prototype en ligne de commande (`scripts/prototype_cli.py`) : saisie de la

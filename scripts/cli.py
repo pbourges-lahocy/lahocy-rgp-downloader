@@ -1,18 +1,24 @@
 #!/usr/bin/env python
-"""Prototype en ligne de commande — Phase 2 du RGP Downloader Lahocy.
+"""RGP Downloader Lahocy — ligne de commande (Phases 2 et 3).
 
-Ne télécharge rien : à partir d'une position de chantier, d'une date et
-d'une plage horaire, détermine les stations RGP les plus proches, vérifie
-en ligne quelles données sont réellement disponibles, et affiche exactement
-les fichiers qui seraient téléchargés (avec les avertissements pertinents).
+À partir d'une position de chantier, d'une date et d'une plage horaire,
+détermine les stations RGP les plus proches, vérifie en ligne quelles
+données sont réellement disponibles, et affiche exactement les fichiers
+concernés.
+
+Sans --download : dry-run, rien n'est téléchargé (Phase 2).
+Avec --download DEST : télécharge réellement les fichiers disponibles pour
+les stations sélectionnées vers DEST/RGP/AAAA-MM-JJ/STATION/, les rend
+exploitables (décompression + conversion Hatanaka si besoin), et écrit
+DEST/RGP/AAAA-MM-JJ/rapport_RGP.txt (Phase 3).
 
 Exemples :
 
-    python scripts/prototype_cli.py --x 648237.66 --y 6862271.99 \\
+    python scripts/cli.py --x 648237.66 --y 6862271.99 \\
         --date 14/09/2026 --start 08:15 --end 17:45
 
-    python scripts/prototype_cli.py --lat 48.8566 --lon 2.3522 \\
-        --date 14/09/2026 --full-day --count 5 --refresh-catalog
+    python scripts/cli.py --lat 48.8566 --lon 2.3522 \\
+        --date 14/09/2026 --full-day --count 5 --download D:\\Chantiers
 """
 
 from __future__ import annotations
@@ -34,7 +40,9 @@ from app.config.loader import load_config  # noqa: E402
 from app.geo.coordinates import InvalidCoordinatesError, lambert93_to_wgs84, wgs84_to_lambert93  # noqa: E402
 from app.rgp.availability import AvailabilityStatus, check_availability_for_utc_period  # noqa: E402
 from app.rgp.catalog import get_catalog  # noqa: E402
+from app.rgp.downloader import download_station_files, has_enough_disk_space  # noqa: E402
 from app.rgp.provider_ign import IgnProviderIGN  # noqa: E402
+from app.rgp.report import ChantierInfo, StationReportEntry, build_report  # noqa: E402
 from app.rgp.stations import find_nearest  # noqa: E402
 from app.utils.dates import local_range_to_utc  # noqa: E402
 from app.utils.http_client import IgnServerUnavailableError, RgpHttpClient  # noqa: E402
@@ -60,10 +68,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--end", help="Heure de fin, format HH:MM (ignoré si --full-day)")
     parser.add_argument("--full-day", action="store_true", help="Journée entière")
     parser.add_argument("--timezone", default=DEFAULT_TIMEZONE, help=f"Fuseau horaire local (défaut : {DEFAULT_TIMEZONE})")
-    parser.add_argument("--count", type=int, default=None, help="Nombre de stations à afficher (défaut : config)")
+    parser.add_argument("--count", type=int, default=None, help="Nombre de stations à considérer (défaut : config)")
     parser.add_argument("--cadence", type=int, default=None, help="Cadence souhaitée en secondes (défaut : config)")
     parser.add_argument("--refresh-catalog", action="store_true", help="Force le re-téléchargement du catalogue de stations")
     parser.add_argument("--config", type=Path, default=None, help="Chemin vers config.yaml")
+    parser.add_argument(
+        "--download",
+        type=Path,
+        default=None,
+        metavar="DOSSIER",
+        help="Télécharge réellement les fichiers vers DOSSIER/RGP/AAAA-MM-JJ/STATION/ "
+        "(sans cette option : dry-run, rien n'est téléchargé)",
+    )
 
     return parser.parse_args(argv)
 
@@ -130,21 +146,20 @@ def main(argv: list[str] | None = None) -> int:
     config = load_config(args.config)
     count = args.count or config.selection.default_station_count
     cadence = args.cadence or config.selection.default_cadence
+    period_label = "journée entière" if args.full_day else f"{args.start} -> {args.end}"
 
     print("=== Chantier ===")
     print(f"Lambert-93 : X={x_l93:.2f}  Y={y_l93:.2f}")
     print(f"WGS84      : lat={lat:.6f}  lon={lon:.6f}")
     print(f"Date       : {site_date.strftime('%d/%m/%Y')}  ({args.timezone})")
-    if args.full_day:
-        print("Période    : journée entière")
-    else:
-        print(f"Période    : {args.start} -> {args.end} (locale)")
+    print(f"Période    : {period_label}")
     print(f"UTC        : {start_utc.strftime('%Y-%m-%d %H:%M')} -> {end_utc.strftime('%Y-%m-%d %H:%M')}")
     print()
 
     provider = IgnProviderIGN(
         base_url=config.ign.base_url, data_dir=config.ign.data_dir, logsheet_dir=config.ign.logsheet_dir
     )
+    report_entries: list[StationReportEntry] = []
 
     try:
         with RgpHttpClient(
@@ -174,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
                     print("   ⚠ Station particulièrement éloignée du chantier.")
                 print(f"   Constellations (config. actuelle) : {station.satellite_system}")
 
-                result = check_availability_for_utc_period(
+                availability = check_availability_for_utc_period(
                     client,
                     provider,
                     station.code,
@@ -185,13 +200,57 @@ def main(argv: list[str] | None = None) -> int:
                     other_cadences=config.ign.cadences,
                 )
 
-                _print_availability(result)
+                _print_availability(availability)
+                report_entries.append(StationReportEntry(station=station, distance_km=sd.distance_km, availability=availability))
                 print()
+
+            if args.download:
+                _run_downloads(client, args.download, site_date, report_entries)
     except IgnServerUnavailableError as exc:
         print(f"\nErreur : le serveur RGP IGN est actuellement inaccessible.\n{exc}", file=sys.stderr)
         return 2
 
+    if args.download:
+        chantier = ChantierInfo(x_l93=x_l93, y_l93=y_l93, lat=lat, lon=lon, site_date=site_date, period_label=period_label)
+        report_text = build_report(chantier, report_entries, generated_at=dt.datetime.now())
+        chantier_dir = args.download / "RGP" / site_date.isoformat()
+        chantier_dir.mkdir(parents=True, exist_ok=True)
+        report_path = chantier_dir / "rapport_RGP.txt"
+        report_path.write_text(report_text, encoding="utf-8")
+        print(f"\nRapport écrit : {report_path}")
+
     return 0
+
+
+def _run_downloads(client, download_root: Path, site_date: dt.date, entries: list[StationReportEntry]) -> None:
+    downloadable = [e for e in entries if e.availability.status != AvailabilityStatus.INDISPONIBLE and e.availability.files]
+    if not downloadable:
+        print("=== Téléchargement ===\nAucune station disponible à télécharger.\n")
+        return
+
+    total_size = sum(e.availability.total_size_bytes for e in downloadable)
+    chantier_dir = download_root / "RGP" / site_date.isoformat()
+    if not has_enough_disk_space(download_root, total_size):
+        print(
+            f"\nErreur : espace disque insuffisant sur {download_root} "
+            f"(besoin estimé : {total_size / (1024 * 1024):.1f} Mo). Téléchargement annulé.",
+            file=sys.stderr,
+        )
+        return
+
+    print(f"=== Téléchargement vers {chantier_dir} ===\n")
+    for entry in downloadable:
+        station_dir = chantier_dir / entry.station.code.upper()
+        print(f"{entry.station.code.upper()} -> {station_dir}")
+        downloaded = download_station_files(client, entry.availability.files, station_dir, process=True)
+        entry.downloaded_files = downloaded
+        for f in downloaded:
+            if f.ok:
+                name = f.processed_path.name if f.processed_path else f.raw_path.name
+                print(f"   ✓ {name}")
+            else:
+                print(f"   ✗ {f.candidate.filename} : {f.error}")
+        print()
 
 
 def _print_availability(result) -> None:

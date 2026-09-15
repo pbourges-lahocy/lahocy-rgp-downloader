@@ -25,11 +25,12 @@ pour l'analyse complète du fonctionnement réel du serveur RGP IGN, vérifiée 
 observation directe des serveurs) :
 
 - ✅ **Phase 1** — Analyse du RGP IGN et documentation (`docs/RGP_IGN.md`).
-- ✅ **Phase 2** — Prototype en ligne de commande (`scripts/prototype_cli.py`) :
+- ✅ **Phase 2** — Prototype en ligne de commande (`scripts/cli.py`) :
   saisie de la position/date/horaires, recherche des stations proches, vérification
   réelle de la disponibilité, affichage exact des fichiers qui seraient téléchargés.
-- ⏳ **Phase 3** — Téléchargement réel (module déjà présent : `app/rgp/downloader.py`,
-  `app/rgp/rinex.py` — reste à brancher sur l'interface).
+- ✅ **Phase 3** — Téléchargement réel (`scripts/cli.py --download DOSSIER`) :
+  téléchargement effectif, décompression et conversion Hatanaka → RINEX, arborescence
+  `RGP/AAAA-MM-JJ/STATION/`, rapport `rapport_RGP.txt`.
 - ⏳ **Phase 4** — Interface graphique complète (carte, sélection, rapport).
 - ⏳ **Phase 5** — Exécutable Windows autonome (`.exe`).
 
@@ -48,19 +49,28 @@ valide les certificats via le magasin de confiance du système d'exploitation
 (bibliothèque `truststore`) plutôt que le bundle certifi embarqué — voir
 `app/utils/http_client.py`.
 
-## Lancement du prototype (Phase 2)
+## Lancement de la ligne de commande
 
 ```bash
-python scripts/prototype_cli.py --x 818372.47 --y 6966074.64 \
+# Dry-run (Phase 2) : n'affiche que ce qui serait téléchargé, sans rien télécharger.
+python scripts/cli.py --x 818372.47 --y 6966074.64 \
     --date 14/09/2026 --start 08:15 --end 17:45 --count 3
 
-python scripts/prototype_cli.py --lat 48.8566 --lon 2.3522 \
+python scripts/cli.py --lat 48.8566 --lon 2.3522 \
     --date 14/09/2026 --full-day --count 5 --refresh-catalog
+
+# Téléchargement réel (Phase 3) : ajoute --download vers un dossier destination.
+python scripts/cli.py --lat 48.8566 --lon 2.3522 \
+    --date 14/09/2026 --full-day --count 3 --download D:\Chantiers
 ```
 
-Ne télécharge rien : affiche les stations les plus proches, leur disponibilité réelle
+Sans `--download` : affiche les stations les plus proches, leur disponibilité réelle
 (vérifiée par requête HTTP sur `rgpdata.ign.fr`), et la liste exacte des fichiers qui
-seraient téléchargés.
+seraient téléchargés — rien n'est écrit sur le disque.
+
+Avec `--download DOSSIER` : télécharge réellement les fichiers des stations
+disponibles/partielles, les décompresse et les convertit (CRINEX → RINEX) dans
+`DOSSIER/RGP/AAAA-MM-JJ/STATION/`, puis écrit `DOSSIER/RGP/AAAA-MM-JJ/rapport_RGP.txt`.
 
 ## Tests
 
