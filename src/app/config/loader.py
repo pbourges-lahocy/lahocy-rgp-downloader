@@ -2,13 +2,46 @@
 
 from __future__ import annotations
 
+import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+_FROZEN = getattr(sys, "frozen", False)
+
+
+def _app_root() -> Path:
+    """Racine à partir de laquelle résoudre `config/config.yaml`.
+
+    En exécution normale (source), c'est la racine du dépôt. Dans un exécutable
+    PyInstaller (`sys.frozen`), `__file__` pointe dans l'archive extraite : on se base
+    alors sur `sys._MEIPASS` (onefile) ou le dossier de l'exécutable (onedir), là où
+    `--add-data` place effectivement `config/`.
+    """
+    if _FROZEN:
+        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+    return Path(__file__).resolve().parents[3]
+
+
+_PROJECT_ROOT = _app_root()
 _DEFAULT_CONFIG_PATH = _PROJECT_ROOT / "config" / "config.yaml"
+
+
+def _default_cache_root() -> Path:
+    """Racine par défaut du cache si `cache.directory` (config.yaml) est relatif.
+
+    En exécutable installé, on écrit dans le profil utilisateur (`%LOCALAPPDATA%`)
+    plutôt qu'à côté de l'exécutable, qui peut se trouver dans un dossier en
+    lecture seule (ex. Program Files) et est partagé entre utilisateurs Windows.
+    En source, on garde le cache dans le dépôt pour rester simple à inspecter.
+    """
+    if _FROZEN:
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            return Path(local_app_data) / "LahocyRGPDownloader"
+    return _PROJECT_ROOT
 
 
 @dataclass(frozen=True)
@@ -52,7 +85,7 @@ class AppConfig:
     def cache_dir(self) -> Path:
         path = Path(self.cache.directory)
         if not path.is_absolute():
-            path = _PROJECT_ROOT / path
+            path = _default_cache_root() / path
         return path
 
 

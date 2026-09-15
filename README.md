@@ -34,7 +34,8 @@ observation directe des serveurs) :
 - ✅ **Phase 4** — Interface graphique (`scripts/gui.py`) : carte de France cliquable
   (Leaflet embarqué), synchronisation Lambert-93/WGS84/carte, recherche et sélection des
   stations avec disponibilité en temps réel, téléchargement et rapport en un clic.
-- ⏳ **Phase 5** — Exécutable Windows autonome (`.exe`).
+- ✅ **Phase 5** — Exécutable Windows autonome (`LahocyRGPDownloader.spec`, PyInstaller) :
+  aucune installation de Python requise pour les techniciens.
 
 ## Installation développeur
 
@@ -109,9 +110,27 @@ structure réelle du serveur IGN (`tests/fixtures/`).
 
 ## Génération de l'exécutable Windows
 
-Prévue en Phase 5, via PyInstaller (`pip install pyinstaller`, puis
-`pyinstaller` sur le point d'entrée de l'interface graphique), afin de distribuer un
-`.exe` autonome aux techniciens sans installation de Python.
+```bash
+pip install -e ".[gui,build]"
+pyinstaller LahocyRGPDownloader.spec
+```
+
+Produit `dist/LahocyRGPDownloader/LahocyRGPDownloader.exe` (mode "onedir" : un dossier
+contenant l'exécutable et ses dépendances — recommandé pour les applications
+QtWebEngine, plus rapide et plus fiable au démarrage qu'un exécutable "onefile"). Pour
+distribuer l'application, copier tout le dossier `dist/LahocyRGPDownloader/` — aucune
+installation de Python n'est nécessaire sur le poste du technicien.
+
+Le spec bundle explicitement :
+- les assets de la carte (`app/ui/assets/`, dont Leaflet embarqué) ;
+- `config/config.yaml` ;
+- les exécutables `hatanaka` (`crx2rnx.exe`/`rnx2crx.exe`) nécessaires à la conversion
+  CRINEX → RINEX ;
+- les données PROJ de `pyproj` (résolues automatiquement via `pyinstaller-hooks-contrib`).
+
+En exécutable figé, le cache des stations (§14) est écrit dans
+`%LOCALAPPDATA%\LahocyRGPDownloader\` plutôt qu'à côté de l'exécutable (qui peut se
+trouver dans un dossier en lecture seule), voir `app/config/loader.py`.
 
 ## Architecture
 

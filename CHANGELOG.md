@@ -4,6 +4,18 @@ Toutes les modifications notables de ce projet sont documentées ici.
 
 ## [Non publié]
 
+### Phase 5 — Exécutable Windows autonome
+
+- `LahocyRGPDownloader.spec` : configuration PyInstaller (mode "onedir") bundlant les
+  assets de la carte, `config/config.yaml`, les binaires `hatanaka` (CRX2RNX/RNX2CRX)
+  et les données PROJ de `pyproj`.
+- `app/config/loader.py` : résolution de `config.yaml` et du dossier de cache adaptée
+  à l'exécution en exécutable figé (`sys.frozen`/`sys._MEIPASS`), avec le cache écrit
+  dans `%LOCALAPPDATA%\LahocyRGPDownloader\` plutôt qu'à côté de l'exécutable.
+- Validé par un test manuel de bout en bout sur l'exécutable compilé : conversion de
+  coordonnées (pyproj), accès réseau au serveur RGP (truststore), chargement du
+  catalogue, recherche de stations et avertissements identiques au mode source.
+
 ### Phase 4 — Interface graphique
 
 - `scripts/gui.py` : interface PySide6 complète — carte de France (Leaflet embarqué
