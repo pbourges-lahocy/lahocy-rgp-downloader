@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lahocy-rgp-downloader"
+version = "0.1.0"
+description = "Téléchargeur simplifié des données RINEX du Réseau GNSS Permanent (RGP) de l'IGN pour les équipes topographiques Lahocy."
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "pyproj>=3.6",
+    "PyYAML>=6.0",
+    "unlzw3>=0.2",
+    "hatanaka>=2.8",
+    "tzdata>=2024.1; sys_platform == 'win32'",
+    "truststore>=0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+gui = [
+    "PySide6>=6.7",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

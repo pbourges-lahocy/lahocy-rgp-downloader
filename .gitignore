@@ -1,0 +1,25 @@
+# Environnement Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+
+# Cache applicatif (catalogue de stations, voir cahier des charges §14)
+.cache/
+
+# Tests / couverture
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Éditeurs / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Sorties utilisateur (dossiers de téléchargement générés par l'application)
+/RGP/

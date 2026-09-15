@@ -1,0 +1,4 @@
+BROKEN00FRA Site Information Form (site log v2.0)
+
+Ce fichier ne contient volontairement pas les champs attendus, pour tester
+la robustesse du parsing (une fiche corrompue ne doit pas bloquer les autres).

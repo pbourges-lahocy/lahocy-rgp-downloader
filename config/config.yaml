@@ -1,0 +1,25 @@
+# Configuration du RGP Downloader Lahocy
+# Toute URL ou paramètre spécifique au fournisseur IGN doit rester ici,
+# jamais codé en dur dans le code (voir docs/RGP_IGN.md).
+
+ign:
+  base_url: "https://rgpdata.ign.fr/pub"
+  data_dir: "data"          # arborescence RINEX 2 (nom court), voir docs/RGP_IGN.md §2.1
+  data_v3_dir: "data_v3"    # arborescence RINEX 3 (nom long IGS), voir docs/RGP_IGN.md §2.2
+  logsheet_dir: "logsheet"  # fiches de site IGS (métadonnées + coordonnées), voir §2.3
+  cadences: [1, 30]         # cadences observées (secondes) ; l'app vérifie toujours en ligne
+
+network:
+  timeout_seconds: 10
+  retries: 3
+  retry_backoff_seconds: 1.5
+  user_agent: "Lahocy-RGP-Downloader/0.1"
+
+cache:
+  directory: ".cache"
+  catalog_filename: "stations_catalog.json"
+  catalog_ttl_days: 30
+
+selection:
+  default_station_count: 3
+  default_cadence: 30
