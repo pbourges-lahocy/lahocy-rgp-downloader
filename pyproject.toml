@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lahocy-rgp-downloader"
-version = "0.1.0"
+version = "0.2.0"
 description = "Téléchargeur simplifié des données RINEX du Réseau GNSS Permanent (RGP) de l'IGN pour les équipes topographiques Lahocy."
 requires-python = ">=3.12"
 dependencies = [

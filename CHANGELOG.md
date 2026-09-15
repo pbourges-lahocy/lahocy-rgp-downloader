@@ -2,7 +2,7 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
-## [Non publié]
+## [0.2.0] - 2026-09-15
 
 - Cadence par défaut passée de 30s à 1s (`config/config.yaml`).
 - Documentation de l'avertissement Microsoft Defender SmartScreen au lancement de
