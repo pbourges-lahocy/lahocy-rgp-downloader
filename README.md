@@ -132,6 +132,31 @@ En exécutable figé, le cache des stations (§14) est écrit dans
 `%LOCALAPPDATA%\LahocyRGPDownloader\` plutôt qu'à côté de l'exécutable (qui peut se
 trouver dans un dossier en lecture seule), voir `app/config/loader.py`.
 
+### ⚠️ Avertissement Microsoft Defender SmartScreen
+
+L'exécutable n'étant pas signé (aucun certificat de signature de code), Windows
+SmartScreen affiche un avertissement « Windows a protégé votre ordinateur » au premier
+lancement d'un fichier téléchargé depuis Internet — comportement normal pour tout `.exe`
+non signé, et particulièrement fréquent pour les binaires PyInstaller. Sur un poste où
+la stratégie de groupe a retiré le bouton « Exécuter quand même », seul un compte
+administrateur peut passer outre.
+
+Contournement sans droits admin, sur le fichier déjà téléchargé :
+
+```powershell
+Unblock-File -Path "chemin\vers\LahocyRGPDownloader-vX.Y.Z-win64.zip"
+```
+
+(à faire **avant** extraction du zip ; sinon débloquer chaque `.exe`/`.dll` un par un via
+clic droit → Propriétés → case « Débloquer »).
+
+Pour une distribution durable aux techniciens (qui n'ont pas non plus les droits admin),
+deux pistes à arbitrer plus tard, indépendantes du code : diffuser via un canal interne
+Lahocy (partage réseau/outil de déploiement IT — évite la marque « provient d'Internet »
+qui déclenche SmartScreen) ou signer l'exécutable avec un certificat de signature de
+code (élimine l'avertissement durablement, mais implique un coût et une démarche auprès
+d'une autorité de certification).
+
 ## Architecture
 
 ```text

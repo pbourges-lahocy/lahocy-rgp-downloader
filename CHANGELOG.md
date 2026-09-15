@@ -4,6 +4,12 @@ Toutes les modifications notables de ce projet sont documentées ici.
 
 ## [Non publié]
 
+- Documentation de l'avertissement Microsoft Defender SmartScreen au lancement de
+  l'exécutable non signé (contournement `Unblock-File` sans droits admin, pistes de
+  distribution durable à arbitrer plus tard) — voir README.
+
+## [0.1.0] - 2026-09-15
+
 ### Phase 5 — Exécutable Windows autonome
 
 - `LahocyRGPDownloader.spec` : configuration PyInstaller (mode "onedir") bundlant les
