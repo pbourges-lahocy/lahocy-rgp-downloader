@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1.0, width=device-width">
+<link rel="stylesheet" href="leaflet/leaflet.css">
+<style>
+  html, body, #map { height: 100%; margin: 0; padding: 0; }
+  .station-popup { font-family: sans-serif; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script src="leaflet/leaflet.js"></script>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script>
+  var bridge = null;
+  new QWebChannel(qt.webChannelTransport, function (channel) {
+      bridge = channel.objects.bridge;
+      bridge.notify_map_ready();
+  });
+
+  var map = L.map('map').setView([46.6, 2.5], 6);  // Centre approximatif de la France
+  var tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+  tileLayer.on('tileerror', function (e) {
+      console.error('Erreur de chargement de tuile : url=' + (e.tile ? e.tile.src : '?'));
+  });
+
+  var chantierMarker = null;
+  var stationCircles = {};
+
+  var statusColors = {
+      disponible: '#2e7d32',
+      partiel: '#f9a825',
+      indisponible: '#c62828'
+  };
+
+  map.on('click', function (e) {
+      setChantier(e.latlng.lat, e.latlng.lng);
+      if (bridge) bridge.notify_chantier_clicked(e.latlng.lat, e.latlng.lng);
+  });
+
+  function setChantier(lat, lon) {
+      if (chantierMarker) {
+          chantierMarker.setLatLng([lat, lon]);
+      } else {
+          chantierMarker = L.marker([lat, lon], { draggable: true }).addTo(map);
+          chantierMarker.on('dragend', function () {
+              var pos = chantierMarker.getLatLng();
+              if (bridge) bridge.notify_chantier_clicked(pos.lat, pos.lng);
+          });
+      }
+      chantierMarker.bindPopup('Chantier');
+  }
+
+  function centerOn(lat, lon, zoom) {
+      map.setView([lat, lon], zoom || 12);
+  }
+
+  function clearStations() {
+      for (var code in stationCircles) {
+          map.removeLayer(stationCircles[code]);
+      }
+      stationCircles = {};
+  }
+
+  function setStations(stations) {
+      clearStations();
+      stations.forEach(function (s) {
+          var color = statusColors[s.status] || '#616161';
+          var circle = L.circleMarker([s.lat, s.lon], {
+              radius: s.selected ? 10 : 7,
+              color: '#222',
+              weight: s.selected ? 3 : 1,
+              fillColor: color,
+              fillOpacity: 0.85
+          }).addTo(map);
+          circle.bindPopup(
+              '<div class="station-popup"><b>' + s.code.toUpperCase() + '</b> — ' + s.name +
+              '<br>Distance : ' + s.distance_km.toFixed(1) + ' km' +
+              '<br>État : ' + s.status +
+              '</div>'
+          );
+          circle.on('click', function () {
+              if (bridge) bridge.notify_station_clicked(s.code);
+          });
+          stationCircles[s.code] = circle;
+      });
+  }
+</script>
+</body>
+</html>

@@ -4,6 +4,29 @@ Toutes les modifications notables de ce projet sont documentées ici.
 
 ## [Non publié]
 
+### Phase 4 — Interface graphique
+
+- `scripts/gui.py` : interface PySide6 complète — carte de France (Leaflet embarqué
+  localement, sans CDN, tuiles OpenStreetMap), synchronisation automatique entre carte,
+  Lambert-93 et WGS84, saisie date/horaires avec « Journée entière », recherche des
+  10 stations les plus proches avec disponibilité vérifiée en ligne, tableau de
+  sélection avec présélection par défaut (stations disponibles les plus proches),
+  téléchargement réel avec rapport, journal affichant tous les avertissements/erreurs.
+- `app.ui.map_view` / `app.ui.map_bridge` : widget carte `QWebEngineView` + pont
+  `QWebChannel` pour les événements carte -> Python (clic, glisser-déposer du marqueur,
+  clic sur une station).
+- `app.ui.workers` : threads Qt (`CatalogWorker`, `SearchWorker`, `DownloadWorker`)
+  réutilisant telles quelles les fonctions déjà testées des phases 2-3, pour garder
+  l'interface réactive pendant les échanges réseau.
+- Corrige un rendu de carte totalement noir sur les postes sans accélération GPU
+  (session distante/VM) via un repli en rendu logiciel QtWebEngine.
+- Corrige l'absence des tuiles OpenStreetMap (page carte chargée depuis `file://`) :
+  QtWebEngine bloque par défaut l'accès réseau distant depuis une origine locale
+  (`LocalContentCanAccessRemoteUrls`), désormais activé explicitement.
+- Validé par un test manuel de bout en bout (clic carte -> recherche réelle -> 10
+  stations trouvées près de Brest -> présélection correcte en tenant compte des
+  stations indisponibles -> activation du téléchargement).
+
 ### Phase 3 — Téléchargement réel
 
 - `scripts/cli.py` (renommé depuis `prototype_cli.py`) : nouvelle option

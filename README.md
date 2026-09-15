@@ -31,7 +31,9 @@ observation directe des serveurs) :
 - ✅ **Phase 3** — Téléchargement réel (`scripts/cli.py --download DOSSIER`) :
   téléchargement effectif, décompression et conversion Hatanaka → RINEX, arborescence
   `RGP/AAAA-MM-JJ/STATION/`, rapport `rapport_RGP.txt`.
-- ⏳ **Phase 4** — Interface graphique complète (carte, sélection, rapport).
+- ✅ **Phase 4** — Interface graphique (`scripts/gui.py`) : carte de France cliquable
+  (Leaflet embarqué), synchronisation Lambert-93/WGS84/carte, recherche et sélection des
+  stations avec disponibilité en temps réel, téléchargement et rapport en un clic.
 - ⏳ **Phase 5** — Exécutable Windows autonome (`.exe`).
 
 ## Installation développeur
@@ -41,13 +43,37 @@ Prérequis : Python 3.12+ (testé avec 3.14).
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
-pip install -e ".[dev]"
+pip install -e ".[dev,gui]"
 ```
+
+`gui` installe PySide6 (interface graphique + navigateur Leaflet embarqué) ; omettez-le
+si seule la ligne de commande vous intéresse.
 
 Sur un poste Windows d'entreprise avec inspection TLS (proxy/pare-feu), l'application
 valide les certificats via le magasin de confiance du système d'exploitation
 (bibliothèque `truststore`) plutôt que le bundle certifi embarqué — voir
 `app/utils/http_client.py`.
+
+## Lancement de l'interface graphique
+
+```bash
+python scripts/gui.py
+```
+
+- Cliquez sur la carte (ou saisissez X/Y Lambert-93 / latitude-longitude — les trois se
+  synchronisent automatiquement) pour positionner le chantier.
+- Renseignez la date et l'horaire (ou cochez « Journée entière »).
+- Choisissez le nombre de stations souhaité, puis « Rechercher les stations RGP » :
+  les 10 stations les plus proches s'affichent sur la carte et dans le tableau, avec leur
+  disponibilité réelle (vérifiée en ligne). Les stations sont sélectionnables/désélectionnables.
+- « Télécharger les données RGP » demande un dossier de destination, télécharge les
+  fichiers des stations cochées, les rend exploitables, et écrit `rapport_RGP.txt`.
+- Le panneau **Journal** affiche tous les avertissements et erreurs — rien n'est masqué.
+
+La carte utilise Leaflet embarqué localement (`app/ui/assets/leaflet/`, aucune
+dépendance CDN) avec les tuiles OpenStreetMap ; seules ces tuiles nécessitent une
+connexion Internet (l'application en a de toute façon besoin pour le RGP). Si la carte
+reste noire ou grise, voir la note GPU/QtWebEngine dans `scripts/gui.py`.
 
 ## Lancement de la ligne de commande
 
@@ -91,13 +117,19 @@ Prévue en Phase 5, via PyInstaller (`pip install pyinstaller`, puis
 
 ```text
 src/app/
-├── ui/                  Interface graphique (Phase 4)
+├── ui/
+│   ├── main_window.py   Fenêtre principale (PySide6)
+│   ├── map_view.py       Widget carte (QWebEngineView + Leaflet embarqué)
+│   ├── map_bridge.py      Pont Qt <-> JavaScript (QWebChannel)
+│   ├── workers.py         Threads Qt pour les appels réseau (catalogue/recherche/téléchargement)
+│   └── assets/            HTML de la carte + Leaflet local (JS/CSS/icônes, sans CDN)
 ├── rgp/
 │   ├── catalog.py       Catalogue des stations (agrégé depuis les fiches logsheet IGS)
 │   ├── stations.py      Modèle Station + recherche des plus proches
 │   ├── availability.py  Vérification réelle de la disponibilité (HTTP HEAD)
 │   ├── downloader.py    Téléchargement des fichiers sélectionnés
 │   ├── rinex.py         Décompression (.Z/.gz) et conversion Hatanaka → RINEX
+│   ├── report.py        Génération du rapport de téléchargement (rapport_RGP.txt)
 │   └── provider_ign.py  SEUL module qui connaît la structure du serveur IGN
 ├── geo/
 │   ├── coordinates.py   Lambert-93 <-> WGS84 (pyproj), parsing sexagésimal IGS
