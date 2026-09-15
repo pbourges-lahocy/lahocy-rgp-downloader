@@ -22,4 +22,4 @@ cache:
 
 selection:
   default_station_count: 3
-  default_cadence: 30
+  default_cadence: 1
