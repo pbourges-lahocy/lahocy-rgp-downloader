@@ -51,6 +51,14 @@ def hour_to_session_letter(hour_utc: int) -> str:
     return _SESSION_LETTERS[hour_utc]
 
 
+def session_letter_to_hour(letter: str) -> int:
+    """Convertit une lettre de session RINEX ('a'-'x') en heure UTC (0-23)."""
+    try:
+        return _SESSION_LETTERS.index(letter)
+    except ValueError as exc:
+        raise ValueError(f"Lettre de session RINEX invalide : {letter!r}") from exc
+
+
 def session_letters_for_range(start: dt.datetime, end: dt.datetime) -> list[str]:
     """Liste ordonnée des lettres de session horaire UTC couvrant [start, end].
 

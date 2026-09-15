@@ -35,6 +35,7 @@ from app.config.loader import AppConfig, load_config
 from app.geo.coordinates import InvalidCoordinatesError, lambert93_to_wgs84, wgs84_to_lambert93
 from app.rgp.availability import AvailabilityStatus
 from app.rgp.report import ChantierInfo
+from app.rgp.rinex_merge import GNSS_SYSTEMS
 from app.rgp.stations import Station
 from app.ui.map_view import MapView
 from app.ui.workers import CatalogWorker, DownloadWorker, SearchWorker, StationSearchResult
@@ -236,6 +237,18 @@ class MainWindow(QMainWindow):
         group = QGroupBox("Téléchargement")
         layout = QVBoxLayout(group)
 
+        layout.addWidget(QLabel("Constellations à conserver :"))
+        constellations_row = QHBoxLayout()
+        self.constellation_checkboxes: dict[str, QCheckBox] = {}
+        # Systèmes courants au RGP (voir docs/RGP_IGN.md §8) ; toutes cochées par défaut
+        # = aucun filtrage (les fichiers ne sont fusionnés/réécrits que si nécessaire).
+        for letter in ("G", "R", "E", "C", "S"):
+            checkbox = QCheckBox(f"{GNSS_SYSTEMS[letter]} ({letter})")
+            checkbox.setChecked(True)
+            self.constellation_checkboxes[letter] = checkbox
+            constellations_row.addWidget(checkbox)
+        layout.addLayout(constellations_row)
+
         self.download_button = QPushButton("Télécharger les données RGP")
         self.download_button.setEnabled(False)
         self.download_button.clicked.connect(self._on_download_clicked)
@@ -247,6 +260,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.download_progress)
 
         return group
+
+    def _selected_constellations(self) -> set[str] | None:
+        """None si tout est coché (aucun filtrage) ; sinon l'ensemble exact des lettres cochées."""
+        checked = {letter for letter, box in self.constellation_checkboxes.items() if box.isChecked()}
+        if checked == set(self.constellation_checkboxes):
+            return None
+        return checked
 
     def _build_log_group(self) -> QGroupBox:
         group = QGroupBox("Journal")
@@ -541,11 +561,22 @@ class MainWindow(QMainWindow):
             site_date=site_date, period_label=period_label,
         )
 
+        keep_systems = self._selected_constellations()
+        if keep_systems is not None and not keep_systems:
+            self._show_error(
+                "Aucune constellation sélectionnée", "Cochez au moins une constellation à conserver."
+            )
+            return
+
         self.download_button.setEnabled(False)
         self.download_progress.setVisible(True)
         self._log(f"Téléchargement vers {destination_path} pour {len(selected)} station(s)...")
+        if keep_systems:
+            self._log(f"Filtrage constellations : {', '.join(sorted(keep_systems))}")
 
-        self._download_worker = DownloadWorker(self.config, chantier, destination_path, site_date, selected)
+        self._download_worker = DownloadWorker(
+            self.config, chantier, destination_path, site_date, selected, keep_systems
+        )
         self._download_worker.progress.connect(lambda msg: self._log(msg))
         self._download_worker.file_done.connect(self._on_download_file_done)
         self._download_worker.succeeded.connect(self._on_download_succeeded)

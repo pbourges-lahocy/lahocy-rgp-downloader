@@ -21,7 +21,7 @@ from app.rgp.availability import (
     check_availability_for_utc_period,
 )
 from app.rgp.catalog import get_catalog
-from app.rgp.downloader import download_station_files, has_enough_disk_space
+from app.rgp.downloader import download_and_merge_station_files, has_enough_disk_space
 from app.rgp.provider_ign import IgnProviderIGN
 from app.rgp.report import ChantierInfo, StationReportEntry, build_report
 from app.rgp.stations import Station, find_nearest
@@ -156,6 +156,7 @@ class DownloadWorker(QThread):
         destination: Path,
         site_date: dt.date,
         entries: list[StationSearchResult],
+        keep_systems: set[str] | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -164,6 +165,7 @@ class DownloadWorker(QThread):
         self._destination = destination
         self._site_date = site_date
         self._entries = entries
+        self._keep_systems = keep_systems
 
     def run(self) -> None:
         downloadable = [
@@ -192,17 +194,37 @@ class DownloadWorker(QThread):
 
                     station_dir = chantier_dir / entry.station.code.upper()
                     self.progress.emit(f"Téléchargement {entry.station.code.upper()}...")
-                    downloaded = download_station_files(client, entry.availability.files, station_dir, process=True)
-                    report_entry.downloaded_files = downloaded
-                    for f in downloaded:
-                        name = (
-                            f.processed_path.name
-                            if f.processed_path
-                            else (f.raw_path.name if f.raw_path else f.candidate.filename)
-                        )
+                    result = download_and_merge_station_files(
+                        client, entry.availability.files, station_dir, self._site_date, self._keep_systems
+                    )
+                    report_entry.downloaded_files = result.downloaded_files
+                    report_entry.merged_path = result.merged_path
+                    report_entry.merge_error = result.merge_error
+                    report_entry.constellations_kept = self._keep_systems
+
+                    for f in result.downloaded_files:
+                        if not f.ok:
+                            self.file_done.emit(
+                                DownloadFileEvent(
+                                    station_code=entry.station.code.upper(),
+                                    filename=f.candidate.filename,
+                                    ok=False,
+                                    error=f.error or "",
+                                )
+                            )
+                    if result.merged_path:
                         self.file_done.emit(
                             DownloadFileEvent(
-                                station_code=entry.station.code.upper(), filename=name, ok=f.ok, error=f.error or ""
+                                station_code=entry.station.code.upper(), filename=result.merged_path.name, ok=True
+                            )
+                        )
+                    elif result.merge_error:
+                        self.file_done.emit(
+                            DownloadFileEvent(
+                                station_code=entry.station.code.upper(),
+                                filename="(fusion)",
+                                ok=False,
+                                error=result.merge_error,
                             )
                         )
 

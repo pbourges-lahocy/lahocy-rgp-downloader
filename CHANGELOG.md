@@ -4,9 +4,30 @@ Toutes les modifications notables de ce projet sont documentées ici.
 
 ## [Non publié]
 
+- Cadence par défaut passée de 30s à 1s (`config/config.yaml`).
 - Documentation de l'avertissement Microsoft Defender SmartScreen au lancement de
   l'exécutable non signé (contournement `Unblock-File` sans droits admin, pistes de
   distribution durable à arbitrer plus tard) — voir README.
+- **Fusion des fichiers RINEX horaires et filtrage par constellation** :
+  - `app/rgp/rinex_merge.py` : fusionne plusieurs fichiers RINEX 2 horaires d'une même
+    station/journée en un seul fichier continu couvrant exactement la période demandée,
+    avec filtrage optionnel par constellation GNSS (GPS/GLONASS/Galileo/BeiDou/SBAS).
+    Portée volontairement limitée à ce cas précis (en-têtes identiques) plutôt qu'un
+    outil de fusion RINEX générique — gfzrnx (payant en usage professionnel routinier,
+    ~300 €/an) et teqc (non maintenu depuis 2019) ont été écartés ; voir
+    docs/RGP_IGN.md §8.1. Format vérifié contre la spec RINEX 2.11 officielle et
+    validé sur des données RGP réelles (26 types d'observation, époques à 36
+    satellites multi-constellations avec lignes de continuation).
+  - `app/rgp/downloader.py` : `download_and_merge_station_files()` orchestre
+    téléchargement + fusion, avec nommage explicite du fichier résultant
+    (`STATIONjjj_HHMM-HHMM[_LETTRES].yyo`) et repli sûr sur les fichiers individuels
+    si la fusion échoue (jamais de perte de données).
+  - CLI : nouvelle option `--constellations G,R,E,...`.
+  - Interface graphique : cases à cocher par constellation dans le panneau
+    Téléchargement (tout coché par défaut = aucun filtrage).
+  - `app/rgp/report.py` : le rapport indique le fichier fusionné et les constellations
+    conservées.
+  - 13 nouveaux tests (dont validation réelle contre le serveur IGN).
 
 ## [0.1.0] - 2026-09-15
 

@@ -86,3 +86,44 @@ def test_report_handles_unavailable_station_without_files():
 
     assert "indisponibles" in report
     assert "Fichiers : aucun" in report
+
+
+def test_report_shows_merged_file_and_constellations():
+    provider = IgnProviderIGN(base_url="https://rgpdata.ign.fr/pub", data_dir="data", logsheet_dir="logsheet")
+    candidate = provider.rinex2_candidate("ren1", dt.date(2026, 9, 15), "i", 30)
+    availability = AvailabilityResult(
+        station_code="ren1", requested_cadence=30, status=AvailabilityStatus.DISPONIBLE, files=[candidate]
+    )
+    entry = StationReportEntry(
+        station=make_station("ren1"),
+        distance_km=17.8,
+        availability=availability,
+        merged_path=Path("REN1/ren1258_0800-1700_G.26o"),
+        constellations_kept={"G"},
+    )
+
+    report = build_report(make_chantier(), [entry], generated_at=dt.datetime(2026, 9, 15, 18, 0, 0))
+
+    assert "Fichiers : ren1258_0800-1700_G.26o" in report
+    assert "Constellations conservées : G" in report
+
+
+def test_report_surfaces_merge_error_as_warning():
+    provider = IgnProviderIGN(base_url="https://rgpdata.ign.fr/pub", data_dir="data", logsheet_dir="logsheet")
+    candidate = provider.rinex2_candidate("ren1", dt.date(2026, 9, 15), "i", 30)
+    availability = AvailabilityResult(
+        station_code="ren1", requested_cadence=30, status=AvailabilityStatus.DISPONIBLE, files=[candidate]
+    )
+    downloaded = DownloadedFile(candidate=candidate, raw_path=Path("REN1/ren1258i.26d.Z"), processed_path=Path("REN1/ren1258i.26o"))
+    entry = StationReportEntry(
+        station=make_station("ren1"),
+        distance_km=17.8,
+        availability=availability,
+        downloaded_files=[downloaded],
+        merge_error="types d'observation différents",
+    )
+
+    report = build_report(make_chantier(), [entry], generated_at=dt.datetime(2026, 9, 15, 18, 0, 0))
+
+    assert "fusion des fichiers échouée" in report
+    assert "ren1258i.26o" in report  # repli sur le fichier individuel

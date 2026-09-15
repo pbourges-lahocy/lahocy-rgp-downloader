@@ -203,6 +203,16 @@ Information disponible **par station** dans la fiche de site (`logsheet`), champ
 
 En pratique, la présence de fichiers navigation GPS (`n`)/GLONASS (`g`) en RINEX2 ne renseigne que sur GPS+GLONASS (RINEX 2.11 ne distingue pas plus) ; le fichier `MN` mixte en RINEX3 contient potentiellement toutes les constellations reçues par le récepteur (GPS/GLONASS/Galileo/BeiDou/SBAS) sans avoir besoin de fichiers séparés.
 
+### 8.1 Fusion des fichiers horaires et filtrage par constellation (fonctionnalité applicative)
+
+L'application propose de fusionner plusieurs fichiers horaires d'une même station/journée en un seul fichier RINEX continu couvrant exactement la période demandée, avec filtrage optionnel par constellation (`app/rgp/rinex_merge.py`) — un besoin exprimé après coup, inspiré d'un ancien service en ligne de l'IGN qui faisait ce travail côté serveur.
+
+Deux outils de référence du domaine ont été évalués et écartés :
+- **gfzrnx** (GFZ Potsdam) : le plus complet et activement maintenu, mais sa licence impose un abonnement commercial (~300 €/an) pour un usage professionnel routinier — incompatible avec un usage Lahocy sans validation budgétaire préalable.
+- **teqc** (UNAVCO) : gratuit pour tout usage, et très probablement l'outil utilisé par l'ancien service IGN (on a observé la signature `teqc 2019Feb25 IGN-RGP` dans l'en-tête d'un fichier journalier réel, §4) — mais non maintenu depuis 2019.
+
+Faute d'outil librement redistribuable et maintenu, un fusionneur RINEX 2 maison a été écrit (`app/rgp/rinex_merge.py`), à portée volontairement limitée : il ne traite que le cas réellement rencontré ici (fichiers de la même station/même journée, donc en-têtes identiques), pas la fusion RINEX générique. Format vérifié contre la spec officielle RINEX 2.11 (files.igs.org/pub/data/format/rinex211.txt) et validé sur des données RGP réelles (fichier à 26 types d'observation, époques jusqu'à 36 satellites multi-constellations nécessitant plusieurs lignes de continuation).
+
 ## 9. Réseau et zones couvertes
 
 - Réseau principal métropole + DOM (Guadeloupe `GLP`, etc.) mélangés dans `/pub/data/`.

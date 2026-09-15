@@ -67,8 +67,14 @@ python scripts/gui.py
 - Choisissez le nombre de stations souhaité, puis « Rechercher les stations RGP » :
   les 10 stations les plus proches s'affichent sur la carte et dans le tableau, avec leur
   disponibilité réelle (vérifiée en ligne). Les stations sont sélectionnables/désélectionnables.
+- Cochez/décochez les **constellations à conserver** (GPS/GLONASS/Galileo/BeiDou/SBAS) —
+  tout coché (par défaut) = aucun filtrage.
 - « Télécharger les données RGP » demande un dossier de destination, télécharge les
-  fichiers des stations cochées, les rend exploitables, et écrit `rapport_RGP.txt`.
+  fichiers des stations cochées. Si plusieurs fichiers horaires sont nécessaires, ou
+  qu'un filtrage par constellation est actif, ils sont fusionnés en **un seul fichier
+  RINEX continu** couvrant exactement la période demandée (`STATIONjjj_HHMM-HHMM.yyo`,
+  suffixé des lettres de constellation si filtré, ex. `aaer257_0600-1600_G.26o`) — puis
+  `rapport_RGP.txt` est écrit.
 - Le panneau **Journal** affiche tous les avertissements et erreurs — rien n'est masqué.
 
 La carte utilise Leaflet embarqué localement (`app/ui/assets/leaflet/`, aucune
@@ -89,6 +95,10 @@ python scripts/cli.py --lat 48.8566 --lon 2.3522 \
 # Téléchargement réel (Phase 3) : ajoute --download vers un dossier destination.
 python scripts/cli.py --lat 48.8566 --lon 2.3522 \
     --date 14/09/2026 --full-day --count 3 --download D:\Chantiers
+
+# Fusion des fichiers horaires + filtrage GPS/Galileo uniquement.
+python scripts/cli.py --lat 48.8566 --lon 2.3522 \
+    --date 14/09/2026 --start 08:00 --end 17:00 --constellations G,E --download D:\Chantiers
 ```
 
 Sans `--download` : affiche les stations les plus proches, leur disponibilité réelle
@@ -98,6 +108,10 @@ seraient téléchargés — rien n'est écrit sur le disque.
 Avec `--download DOSSIER` : télécharge réellement les fichiers des stations
 disponibles/partielles, les décompresse et les convertit (CRINEX → RINEX) dans
 `DOSSIER/RGP/AAAA-MM-JJ/STATION/`, puis écrit `DOSSIER/RGP/AAAA-MM-JJ/rapport_RGP.txt`.
+Si plusieurs fichiers horaires couvrent la période, ou que `--constellations` est
+utilisé, ils sont fusionnés en un seul fichier RINEX continu (voir
+`app/rgp/rinex_merge.py` et docs/RGP_IGN.md §8.1 pour le choix de ne pas dépendre d'un
+outil de fusion RINEX tiers, payant ou non maintenu).
 
 ## Tests
 
@@ -173,6 +187,7 @@ src/app/
 │   ├── availability.py  Vérification réelle de la disponibilité (HTTP HEAD)
 │   ├── downloader.py    Téléchargement des fichiers sélectionnés
 │   ├── rinex.py         Décompression (.Z/.gz) et conversion Hatanaka → RINEX
+│   ├── rinex_merge.py   Fusion de fichiers RINEX2 horaires + filtrage par constellation
 │   ├── report.py        Génération du rapport de téléchargement (rapport_RGP.txt)
 │   └── provider_ign.py  SEUL module qui connaît la structure du serveur IGN
 ├── geo/

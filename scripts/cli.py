@@ -40,9 +40,10 @@ from app.config.loader import load_config  # noqa: E402
 from app.geo.coordinates import InvalidCoordinatesError, lambert93_to_wgs84, wgs84_to_lambert93  # noqa: E402
 from app.rgp.availability import AvailabilityStatus, check_availability_for_utc_period  # noqa: E402
 from app.rgp.catalog import get_catalog  # noqa: E402
-from app.rgp.downloader import download_station_files, has_enough_disk_space  # noqa: E402
+from app.rgp.downloader import download_and_merge_station_files, has_enough_disk_space  # noqa: E402
 from app.rgp.provider_ign import IgnProviderIGN  # noqa: E402
 from app.rgp.report import ChantierInfo, StationReportEntry, build_report  # noqa: E402
+from app.rgp.rinex_merge import GNSS_SYSTEMS  # noqa: E402
 from app.rgp.stations import find_nearest  # noqa: E402
 from app.utils.dates import local_range_to_utc  # noqa: E402
 from app.utils.http_client import IgnServerUnavailableError, RgpHttpClient  # noqa: E402
@@ -80,8 +81,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Télécharge réellement les fichiers vers DOSSIER/RGP/AAAA-MM-JJ/STATION/ "
         "(sans cette option : dry-run, rien n'est téléchargé)",
     )
+    parser.add_argument(
+        "--constellations",
+        default=None,
+        metavar="G,R,E,...",
+        help="Constellations à conserver, séparées par des virgules parmi "
+        f"{'/'.join(GNSS_SYSTEMS)} ({', '.join(GNSS_SYSTEMS.values())}). "
+        "Par défaut : aucun filtrage, tout est conservé.",
+    )
 
     return parser.parse_args(argv)
+
+
+def parse_constellations(raw: str | None) -> set[str] | None:
+    if not raw:
+        return None
+    letters = {code.strip().upper() for code in raw.split(",") if code.strip()}
+    unknown = letters - GNSS_SYSTEMS.keys()
+    if unknown:
+        raise InputError(
+            f"Constellation(s) inconnue(s) : {', '.join(sorted(unknown))}. "
+            f"Valeurs possibles : {'/'.join(GNSS_SYSTEMS)}."
+        )
+    return letters
 
 
 def resolve_site_coordinates(args: argparse.Namespace) -> tuple[float, float, float, float]:
@@ -139,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
             end_time = parse_clock_time(args.end, "de fin")
 
         start_utc, end_utc = local_range_to_utc(site_date, start_time, end_time, args.full_day, args.timezone)
+        keep_systems = parse_constellations(args.constellations)
     except (InputError, InvalidCoordinatesError, ValueError) as exc:
         print(f"Erreur de saisie : {exc}", file=sys.stderr)
         return 1
@@ -205,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
                 print()
 
             if args.download:
-                _run_downloads(client, args.download, site_date, report_entries)
+                _run_downloads(client, args.download, site_date, report_entries, keep_systems)
     except IgnServerUnavailableError as exc:
         print(f"\nErreur : le serveur RGP IGN est actuellement inaccessible.\n{exc}", file=sys.stderr)
         return 2
@@ -222,7 +245,9 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _run_downloads(client, download_root: Path, site_date: dt.date, entries: list[StationReportEntry]) -> None:
+def _run_downloads(
+    client, download_root: Path, site_date: dt.date, entries: list[StationReportEntry], keep_systems: set[str] | None
+) -> None:
     downloadable = [e for e in entries if e.availability.status != AvailabilityStatus.INDISPONIBLE and e.availability.files]
     if not downloadable:
         print("=== Téléchargement ===\nAucune station disponible à télécharger.\n")
@@ -242,14 +267,19 @@ def _run_downloads(client, download_root: Path, site_date: dt.date, entries: lis
     for entry in downloadable:
         station_dir = chantier_dir / entry.station.code.upper()
         print(f"{entry.station.code.upper()} -> {station_dir}")
-        downloaded = download_station_files(client, entry.availability.files, station_dir, process=True)
-        entry.downloaded_files = downloaded
-        for f in downloaded:
-            if f.ok:
-                name = f.processed_path.name if f.processed_path else f.raw_path.name
-                print(f"   ✓ {name}")
-            else:
+        result = download_and_merge_station_files(client, entry.availability.files, station_dir, site_date, keep_systems)
+        entry.downloaded_files = result.downloaded_files
+        entry.merged_path = result.merged_path
+        entry.merge_error = result.merge_error
+        entry.constellations_kept = keep_systems
+
+        for f in result.downloaded_files:
+            if not f.ok:
                 print(f"   ✗ {f.candidate.filename} : {f.error}")
+        if result.merged_path:
+            print(f"   ✓ {result.merged_path.name}")
+        elif result.merge_error:
+            print(f"   ✗ Fusion échouée : {result.merge_error}")
         print()
 
 
