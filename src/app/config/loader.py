@@ -75,11 +75,29 @@ class SelectionConfig:
 
 
 @dataclass(frozen=True)
+class NtripCasterConfig:
+    id: str
+    name: str
+    sourcetable_url: str
+    virtual_mounts: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ReferenceNetworksConfig:
+    geocoding_url: str
+    geocoding_max_results: int
+    nearest_count: int
+    ntrip_cache_ttl_days: int
+    ntrip_casters: tuple[NtripCasterConfig, ...]
+
+
+@dataclass(frozen=True)
 class AppConfig:
     ign: IgnConfig
     network: NetworkConfig
     cache: CacheConfig
     selection: SelectionConfig
+    reference: ReferenceNetworksConfig
 
     @property
     def cache_dir(self) -> Path:
@@ -119,5 +137,20 @@ def load_config(path: Path | str | None = None) -> AppConfig:
         selection=SelectionConfig(
             default_station_count=int(raw["selection"]["default_station_count"]),
             default_cadence=int(raw["selection"]["default_cadence"]),
+        ),
+        reference=ReferenceNetworksConfig(
+            geocoding_url=raw["reference_networks"]["geocoding_url"],
+            geocoding_max_results=int(raw["reference_networks"]["geocoding_max_results"]),
+            nearest_count=int(raw["reference_networks"]["nearest_count"]),
+            ntrip_cache_ttl_days=int(raw["reference_networks"]["ntrip_cache_ttl_days"]),
+            ntrip_casters=tuple(
+                NtripCasterConfig(
+                    id=c["id"],
+                    name=c["name"],
+                    sourcetable_url=c["sourcetable_url"],
+                    virtual_mounts=tuple(c.get("virtual_mounts", [])),
+                )
+                for c in raw["reference_networks"]["ntrip_casters"]
+            ),
         ),
     )

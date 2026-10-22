@@ -78,3 +78,16 @@ class MapView(QWebEngineView):
 
     def set_stations(self, stations: list[dict]) -> None:
         self._run_js(f"setStations({json.dumps(stations)});")
+
+    def set_position_label(self, label: str) -> None:
+        self._run_js(f"setPositionLabel({json.dumps(label)});")
+
+    def set_reference_markers(self, markers: list[dict]) -> None:
+        """markers : [{id, lat, lon, color, popup (HTML déjà échappé), highlight}, ...]."""
+        self._run_js(f"setReferenceMarkers({json.dumps(markers)});")
+
+    def open_reference_popup(self, marker_id: str) -> None:
+        self._run_js(f"openReferencePopup({json.dumps(marker_id)});")
+
+    def fit_to_points(self, points: list[tuple[float, float]]) -> None:
+        self._run_js(f"fitToPoints({json.dumps(points)});")

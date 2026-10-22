@@ -2,6 +2,21 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## [Non publié]
+
+- **Onglet « Stations de référence »** : carte des antennes RGP et Centipède RTK avec choix
+  des réseaux, recherche par adresse (géocodeur IGN Géoplateforme) ou clic sur la carte, liste
+  des antennes les plus proches, reprise de la position dans l'onglet de téléchargement.
+  - Nouveau package `app.refstations` (lecture des sourcetables NTRIP 2.0 en HTTPS port 443 —
+    le port 2101 est filtré sur le réseau de développement —, cache avec repli sur la dernière
+    liste connue si le caster est en panne, géocodage, plus proches voisins).
+  - Réseaux et URL dans `config.yaml` (`reference_networks`) ; un caster NTRIP 2.0 s'ajoute sans code.
+  - Chargement parallèle (un thread par réseau) pour qu'un réseau lent ou en panne ne bloque pas l'autre.
+  - `docs/REFERENCE_STATIONS.md` : sources vérifiées (1304 mounts Centipède, mounts virtuels
+    exclus, carte Lizmap en 502 pendant l'analyse).
+  - `RgpHttpClient.get_text` accepte des en-têtes par requête ; messages d'erreur génériques.
+  - 14 nouveaux tests.
+
 ## [0.2.0] - 2026-09-15
 
 - Cadence par défaut passée de 30s à 1s (`config/config.yaml`).

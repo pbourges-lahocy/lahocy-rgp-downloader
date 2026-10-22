@@ -23,3 +23,19 @@ cache:
 selection:
   default_station_count: 3
   default_cadence: 1
+
+# Onglet "Stations de référence" : carte des antennes RGP + casters NTRIP,
+# recherche par adresse. Le RGP vient du catalogue déjà construit (section ign) ;
+# chaque caster NTRIP 2.0 ci-dessous est lu via sa table des mounts (sourcetable) en HTTPS.
+reference_networks:
+  geocoding_url: "https://data.geopf.fr/geocodage/search"  # géocodeur IGN Géoplateforme
+  geocoding_max_results: 5
+  nearest_count: 10
+  ntrip_cache_ttl_days: 1
+  ntrip_casters:
+    - id: "centipede"
+      name: "Centipède RTK"
+      # Le port NTRIP historique 2101 est souvent filtré en entreprise ; le port 443
+      # (NTRIP 2.0 sur TLS) est documenté par Centipède : https://docs.centipede-rtk.org/access.html
+      sourcetable_url: "https://crtk.net/"
+      virtual_mounts: ["NEAR", "NEAR4"]  # mounts "base la plus proche" : pas des antennes physiques

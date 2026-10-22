@@ -82,6 +82,17 @@ dépendance CDN) avec les tuiles OpenStreetMap ; seules ces tuiles nécessitent 
 connexion Internet (l'application en a de toute façon besoin pour le RGP). Si la carte
 reste noire ou grise, voir la note GPU/QtWebEngine dans `scripts/gui.py`.
 
+### Onglet « Stations de référence »
+
+Carte des antennes de référence **RGP (IGN)** et **Centipède RTK** : cochez les réseaux à
+afficher, saisissez une adresse (géocodeur IGN) ou cliquez sur la carte, et la liste des
+antennes les plus proches (tous réseaux cochés confondus, nombre réglable) s'affiche avec la
+distance, le pays et les constellations. « Utiliser cette position pour le téléchargement
+RGP » reporte le point dans l'onglet de téléchargement. Les réseaux se chargent en parallèle
+(une panne de l'un n'empêche pas l'autre), avec cache et repli sur la dernière liste connue.
+Sources, URL et limites vérifiées : [docs/REFERENCE_STATIONS.md](docs/REFERENCE_STATIONS.md) ;
+un autre caster NTRIP 2.0 s'ajoute dans `config/config.yaml` (`reference_networks`).
+
 ## Lancement de la ligne de commande
 
 ```bash
@@ -179,6 +190,7 @@ src/app/
 │   ├── main_window.py   Fenêtre principale (PySide6)
 │   ├── map_view.py       Widget carte (QWebEngineView + Leaflet embarqué)
 │   ├── map_bridge.py      Pont Qt <-> JavaScript (QWebChannel)
+│   ├── reference_tab.py   Onglet « Stations de référence » (RGP + casters NTRIP)
 │   ├── workers.py         Threads Qt pour les appels réseau (catalogue/recherche/téléchargement)
 │   └── assets/            HTML de la carte + Leaflet local (JS/CSS/icônes, sans CDN)
 ├── rgp/
@@ -190,6 +202,11 @@ src/app/
 │   ├── rinex_merge.py   Fusion de fichiers RINEX2 horaires + filtrage par constellation
 │   ├── report.py        Génération du rapport de téléchargement (rapport_RGP.txt)
 │   └── provider_ign.py  SEUL module qui connaît la structure du serveur IGN
+├── refstations/
+│   ├── ntrip.py         Stations d'un caster NTRIP 2.0 (sourcetable) + cache
+│   ├── geocoding.py     Adresse -> coordonnées (IGN Géoplateforme)
+│   ├── nearest.py       Antennes les plus proches
+│   └── sources.py       Registre des réseaux (RGP + casters de config.yaml)
 ├── geo/
 │   ├── coordinates.py   Lambert-93 <-> WGS84 (pyproj), parsing sexagésimal IGS
 │   └── distance.py      Distance géodésique (pyproj.Geod)

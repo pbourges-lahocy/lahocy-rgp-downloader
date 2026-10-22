@@ -38,6 +38,7 @@ from app.rgp.report import ChantierInfo
 from app.rgp.rinex_merge import GNSS_SYSTEMS
 from app.rgp.stations import Station
 from app.ui.map_view import MapView
+from app.ui.reference_tab import ReferenceStationsTab
 from app.ui.workers import CatalogWorker, DownloadWorker, SearchWorker, StationSearchResult
 from app.utils.dates import local_range_to_utc
 
@@ -81,9 +82,8 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ UI
 
     def _build_ui(self) -> None:
-        central = QWidget()
-        self.setCentralWidget(central)
-        root_layout = QHBoxLayout(central)
+        download_page = QWidget()
+        root_layout = QHBoxLayout(download_page)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         root_layout.addWidget(splitter)
@@ -108,7 +108,22 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([440, 840])
 
+        self.reference_tab = ReferenceStationsTab(self.config)
+        self.reference_tab.use_position_requested.connect(self._on_reference_position_chosen)
+
+        self.main_tabs = QTabWidget()
+        self.main_tabs.addTab(download_page, "Téléchargement RGP")
+        self.main_tabs.addTab(self.reference_tab, "Stations de référence")
+        self.setCentralWidget(self.main_tabs)
+
         self.statusBar().showMessage("Prêt.")
+
+    def _on_reference_position_chosen(self, lat: float, lon: float) -> None:
+        self._set_chantier(lat, lon, source="map")  # met à jour tous les champs ; la carte est pilotée ci-dessous
+        self.map_view.set_chantier(lat, lon)
+        self.map_view.center_on(lat, lon)
+        self.main_tabs.setCurrentIndex(0)
+        self._log(f"Position reprise depuis l'onglet Stations de référence : {lat:.6f}, {lon:.6f}")
 
     def _build_location_group(self) -> QGroupBox:
         group = QGroupBox("Localisation du chantier")

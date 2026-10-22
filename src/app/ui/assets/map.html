@@ -20,7 +20,7 @@
       bridge.notify_map_ready();
   });
 
-  var map = L.map('map').setView([46.6, 2.5], 6);  // Centre approximatif de la France
+  var map = L.map('map', { preferCanvas: true }).setView([46.6, 2.5], 6);  // Centre approximatif de la France
   var tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -30,7 +30,10 @@
   });
 
   var chantierMarker = null;
+  var positionLabel = 'Chantier';
   var stationCircles = {};
+  var refLayer = L.layerGroup().addTo(map);
+  var refMarkers = {};
 
   var statusColors = {
       disponible: '#2e7d32',
@@ -53,11 +56,45 @@
               if (bridge) bridge.notify_chantier_clicked(pos.lat, pos.lng);
           });
       }
-      chantierMarker.bindPopup('Chantier');
+      chantierMarker.bindPopup(positionLabel);
+  }
+
+  function setPositionLabel(label) {
+      positionLabel = label;
+      if (chantierMarker) chantierMarker.bindPopup(label);
   }
 
   function centerOn(lat, lon, zoom) {
       map.setView([lat, lon], zoom || 12);
+  }
+
+  function setReferenceMarkers(markers) {
+      refLayer.clearLayers();
+      refMarkers = {};
+      markers.forEach(function (m) {
+          var c = L.circleMarker([m.lat, m.lon], {
+              radius: m.highlight ? 9 : 4,
+              color: m.highlight ? '#000' : '#fff',
+              weight: m.highlight ? 3 : 1,
+              fillColor: m.color,
+              fillOpacity: 0.85
+          });
+          c.bindPopup(m.popup);
+          c.on('click', function () {
+              if (bridge) bridge.notify_station_clicked(m.id);
+          });
+          c.addTo(refLayer);
+          refMarkers[m.id] = c;
+      });
+  }
+
+  function openReferencePopup(id) {
+      var c = refMarkers[id];
+      if (c) c.openPopup();
+  }
+
+  function fitToPoints(points) {
+      if (points.length) map.fitBounds(points, { maxZoom: 12, padding: [40, 40] });
   }
 
   function clearStations() {

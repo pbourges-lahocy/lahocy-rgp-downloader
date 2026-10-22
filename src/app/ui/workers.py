@@ -24,6 +24,9 @@ from app.rgp.catalog import get_catalog
 from app.rgp.downloader import download_and_merge_station_files, has_enough_disk_space
 from app.rgp.provider_ign import IgnProviderIGN
 from app.rgp.report import ChantierInfo, StationReportEntry, build_report
+from app.refstations.geocoding import GeocodeResult, GeocodingError, geocode
+from app.refstations.ntrip import NtripError, load_ntrip_stations
+from app.refstations.sources import RGP_SOURCE_ID, rgp_reference_stations
 from app.rgp.stations import Station, find_nearest
 from app.utils.http_client import IgnServerUnavailableError, RgpHttpClient
 
@@ -237,3 +240,64 @@ class DownloadWorker(QThread):
             self.failed.emit(str(exc))
         except Exception as exc:  # noqa: BLE001
             self.failed.emit(f"Erreur inattendue lors du téléchargement : {exc}")
+
+
+class ReferenceLoadWorker(QThread):
+    """Charge les antennes d'UN réseau. Un thread par réseau : un réseau lent (reconstruction
+    du catalogue RGP, ~1 min) ou en panne ne retarde ni ne bloque l'affichage des autres."""
+
+    loaded = Signal(str, list, list)  # source_id, stations, avertissements
+    failed = Signal(str, str)  # source_id, message
+
+    def __init__(self, config: AppConfig, source_id: str, force_refresh: bool, parent=None) -> None:
+        super().__init__(parent)
+        self._config = config
+        self._source_id = source_id
+        self._force_refresh = force_refresh
+
+    def run(self) -> None:
+        try:
+            with make_client(self._config) as client:
+                if self._source_id == RGP_SOURCE_ID:
+                    rgp = get_catalog(
+                        client, make_provider(self._config), self._config.cache_dir,
+                        self._config.cache.catalog_filename, self._config.cache.catalog_ttl_days,
+                        force_refresh=self._force_refresh,
+                    )
+                    self.loaded.emit(self._source_id, rgp_reference_stations(rgp), [])
+                    return
+                caster = next(c for c in self._config.reference.ntrip_casters if c.id == self._source_id)
+                result = load_ntrip_stations(
+                    client, caster, self._config.cache_dir,
+                    self._config.reference.ntrip_cache_ttl_days, force_refresh=self._force_refresh,
+                )
+                self.loaded.emit(self._source_id, result.stations, result.warnings)
+        except (IgnServerUnavailableError, NtripError) as exc:
+            self.failed.emit(self._source_id, str(exc))
+        except Exception as exc:  # noqa: BLE001
+            self.failed.emit(self._source_id, f"Erreur inattendue : {exc}")
+
+
+class GeocodeWorker(QThread):
+    succeeded = Signal(list)
+    failed = Signal(str)
+
+    def __init__(self, config: AppConfig, query: str, parent=None) -> None:
+        super().__init__(parent)
+        self._config = config
+        self._query = query
+
+    def run(self) -> None:
+        try:
+            with make_client(self._config) as client:
+                results: list[GeocodeResult] = geocode(
+                    client, self._config.reference.geocoding_url, self._query,
+                    self._config.reference.geocoding_max_results,
+                )
+            self.succeeded.emit(results)
+        except IgnServerUnavailableError as exc:
+            self.failed.emit(f"Service d'adresses injoignable : {exc}")
+        except (GeocodingError, ValueError) as exc:
+            self.failed.emit(str(exc))
+        except Exception as exc:  # noqa: BLE001
+            self.failed.emit(f"Erreur inattendue lors de la recherche d'adresse : {exc}")

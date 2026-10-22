@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class IgnServerUnavailableError(RuntimeError):
-    """Le serveur IGN est injoignable après toutes les tentatives."""
+    """Un serveur distant (IGN, caster NTRIP, géocodeur...) est injoignable après toutes les tentatives."""
 
 
 @dataclass(frozen=True)
@@ -91,21 +91,22 @@ class RgpHttpClient:
                 _sleep(self._retry_backoff_seconds * attempt)
 
         raise IgnServerUnavailableError(
-            f"Le serveur RGP IGN est injoignable pour {url} après {self._retries} tentatives : {last_error}"
+            f"Serveur injoignable : {url} après {self._retries} tentatives : {last_error}"
         )
 
-    def get_text(self, url: str) -> str:
-        """Télécharge le contenu texte d'une URL (pages d'index, fiches logsheet).
+    def get_text(self, url: str, headers: dict[str, str] | None = None) -> str:
+        """Télécharge le contenu texte d'une URL (pages d'index, fiches logsheet...).
 
         Décode explicitement en UTF-8 avec repli Latin-1, sans se fier à la détection
         automatique d'httpx : le serveur IGN ne renvoie pas d'en-tête `Content-Type`
         avec charset sur ces fichiers, et certaines fiches (accents dans les noms de
         site) sont en réalité encodées en Latin-1/Windows-1252, pas en UTF-8.
+        `headers` s'ajoute aux en-têtes par défaut pour cette seule requête.
         """
         last_error: Exception | None = None
         for attempt in range(1, self._retries + 1):
             try:
-                response = self._client.get(url)
+                response = self._client.get(url, headers=headers)
                 response.raise_for_status()
                 try:
                     return response.content.decode("utf-8")
@@ -123,7 +124,7 @@ class RgpHttpClient:
                 _sleep(self._retry_backoff_seconds * attempt)
 
         raise IgnServerUnavailableError(
-            f"Le serveur RGP IGN est injoignable pour {url} après {self._retries} tentatives : {last_error}"
+            f"Serveur injoignable : {url} après {self._retries} tentatives : {last_error}"
         )
 
     def download_to_file(self, url: str, destination: Path) -> int:
