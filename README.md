@@ -87,7 +87,9 @@ reste noire ou grise, voir la note GPU/QtWebEngine dans `scripts/gui.py`.
 Carte des antennes de référence **RGP (IGN)** et **Centipède RTK** : cochez les réseaux à
 afficher, saisissez une adresse (géocodeur IGN) ou cliquez sur la carte, et la liste des
 antennes les plus proches (tous réseaux cochés confondus, nombre réglable) s'affiche avec la
-distance, le pays et les constellations. « Utiliser cette position pour le téléchargement
+distance, l'**état (actif / inactif / inconnu)**, le pays et les constellations. Le nom de chaque antenne
+s'affiche sur la carte (au survol, en permanence pour les plus proches et à fort zoom) ; l'anneau vert/rouge/blanc
+indique l'état (voir docs/REFERENCE_STATIONS.md pour ce que « actif » veut dire pour chaque réseau). « Utiliser cette position pour le téléchargement
 RGP » reporte le point dans l'onglet de téléchargement. Les réseaux se chargent en parallèle
 (une panne de l'un n'empêche pas l'autre), avec cache et repli sur la dernière liste connue.
 Sources, URL et limites vérifiées : [docs/REFERENCE_STATIONS.md](docs/REFERENCE_STATIONS.md) ;
@@ -205,6 +207,7 @@ src/app/
 ├── refstations/
 │   ├── ntrip.py         Stations d'un caster NTRIP 2.0 (sourcetable) + cache
 │   ├── geocoding.py     Adresse -> coordonnées (IGN Géoplateforme)
+│   ├── rgp_activity.py  Activité des stations RGP (fichier horaire publié ?)
 │   ├── nearest.py       Antennes les plus proches
 │   └── sources.py       Registre des réseaux (RGP + casters de config.yaml)
 ├── geo/

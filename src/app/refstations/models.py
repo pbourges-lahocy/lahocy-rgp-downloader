@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+STATUS_ONLINE = "online"
+STATUS_OFFLINE = "offline"
+STATUS_UNKNOWN = "unknown"
+
+
 @dataclass(frozen=True)
 class ReferenceStation:
     source_id: str  # identifiant du réseau/caster : "rgp", "centipede"...
@@ -15,6 +20,8 @@ class ReferenceStation:
     country: str = ""
     network: str = ""
     constellations: str = ""
+    status: str = STATUS_UNKNOWN  # STATUS_ONLINE / STATUS_OFFLINE / STATUS_UNKNOWN
+    status_detail: str = ""  # explication lisible, affichée dans la fiche de l'antenne
 
     @property
     def key(self) -> str:

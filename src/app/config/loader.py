@@ -87,7 +87,9 @@ class ReferenceNetworksConfig:
     geocoding_url: str
     geocoding_max_results: int
     nearest_count: int
-    ntrip_cache_ttl_days: int
+    ntrip_cache_ttl_minutes: int
+    offline_retention_days: int
+    rgp_activity_cache_minutes: int
     ntrip_casters: tuple[NtripCasterConfig, ...]
 
 
@@ -142,7 +144,9 @@ def load_config(path: Path | str | None = None) -> AppConfig:
             geocoding_url=raw["reference_networks"]["geocoding_url"],
             geocoding_max_results=int(raw["reference_networks"]["geocoding_max_results"]),
             nearest_count=int(raw["reference_networks"]["nearest_count"]),
-            ntrip_cache_ttl_days=int(raw["reference_networks"]["ntrip_cache_ttl_days"]),
+            ntrip_cache_ttl_minutes=int(raw["reference_networks"]["ntrip_cache_ttl_minutes"]),
+            offline_retention_days=int(raw["reference_networks"]["offline_retention_days"]),
+            rgp_activity_cache_minutes=int(raw["reference_networks"]["rgp_activity_cache_minutes"]),
             ntrip_casters=tuple(
                 NtripCasterConfig(
                     id=c["id"],

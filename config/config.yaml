@@ -31,7 +31,9 @@ reference_networks:
   geocoding_url: "https://data.geopf.fr/geocodage/search"  # géocodeur IGN Géoplateforme
   geocoding_max_results: 5
   nearest_count: 10
-  ntrip_cache_ttl_days: 1
+  ntrip_cache_ttl_minutes: 15   # l'état en ligne/hors ligne doit rester frais
+  offline_retention_days: 90    # une base absente de la table reste affichée "hors ligne" pendant ce délai
+  rgp_activity_cache_minutes: 30
   ntrip_casters:
     - id: "centipede"
       name: "Centipède RTK"

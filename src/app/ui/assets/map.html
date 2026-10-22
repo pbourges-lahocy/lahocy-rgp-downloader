@@ -7,6 +7,8 @@
 <style>
   html, body, #map { height: 100%; margin: 0; padding: 0; }
   .station-popup { font-family: sans-serif; font-size: 13px; }
+  .ref-label { font: 600 11px sans-serif; padding: 1px 4px; background: rgba(255,255,255,.85); border: 0; box-shadow: none; }
+  .ref-label.leaflet-tooltip-right::before, .ref-label.leaflet-tooltip-top::before { display: none; }
 </style>
 </head>
 <body>
@@ -68,16 +70,21 @@
       map.setView([lat, lon], zoom || 12);
   }
 
+  var refMeta = {};
+  var REF_LABEL_ZOOM = 11;   // au-delà, les noms des antennes visibles s'affichent en permanence
+  var REF_LABEL_MAX = 150;   // garde-fou : jamais plus d'étiquettes permanentes que ça
+
   function setReferenceMarkers(markers) {
       refLayer.clearLayers();
       refMarkers = {};
+      refMeta = {};
       markers.forEach(function (m) {
           var c = L.circleMarker([m.lat, m.lon], {
-              radius: m.highlight ? 9 : 4,
-              color: m.highlight ? '#000' : '#fff',
-              weight: m.highlight ? 3 : 1,
+              radius: m.highlight ? 9 : 5,
+              color: m.ring,
+              weight: m.highlight ? 4 : 2,
               fillColor: m.color,
-              fillOpacity: 0.85
+              fillOpacity: m.fillOpacity
           });
           c.bindPopup(m.popup);
           c.on('click', function () {
@@ -85,8 +92,34 @@
           });
           c.addTo(refLayer);
           refMarkers[m.id] = c;
+          refMeta[m.id] = { label: m.label, highlight: m.highlight, labelOn: null };
       });
+      updateReferenceLabels();
   }
+
+  // Étiquette permanente (antennes mises en avant, ou zoom rapproché) ou simple info-bulle au survol.
+  function setReferenceLabel(id, permanent) {
+      var meta = refMeta[id], c = refMarkers[id];
+      if (!c || meta.labelOn === permanent) return;
+      c.unbindTooltip();
+      c.bindTooltip(meta.label, permanent
+          ? { permanent: true, direction: 'right', offset: [8, 0], className: 'ref-label' }
+          : { direction: 'top', className: 'ref-label' });
+      meta.labelOn = permanent;
+  }
+
+  function updateReferenceLabels() {
+      var zoomOk = map.getZoom() >= REF_LABEL_ZOOM, bounds = map.getBounds(), shown = 0;
+      for (var id in refMarkers) {
+          var on = refMeta[id].highlight;
+          if (!on && zoomOk && shown < REF_LABEL_MAX && bounds.contains(refMarkers[id].getLatLng())) {
+              on = true;
+              shown++;
+          }
+          setReferenceLabel(id, on);
+      }
+  }
+  map.on('zoomend moveend', updateReferenceLabels);
 
   function openReferencePopup(id) {
       var c = refMarkers[id];

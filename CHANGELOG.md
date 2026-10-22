@@ -2,7 +2,7 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
-## [Non publié]
+## [0.3.0] - 2026-10-22
 
 - **Onglet « Stations de référence »** : carte des antennes RGP et Centipède RTK avec choix
   des réseaux, recherche par adresse (géocodeur IGN Géoplateforme) ou clic sur la carte, liste
@@ -15,7 +15,17 @@ Toutes les modifications notables de ce projet sont documentées ici.
   - `docs/REFERENCE_STATIONS.md` : sources vérifiées (1304 mounts Centipède, mounts virtuels
     exclus, carte Lizmap en 502 pendant l'analyse).
   - `RgpHttpClient.get_text` accepte des en-têtes par requête ; messages d'erreur génériques.
-  - 14 nouveaux tests.
+  - **État actif / inactif** : pas de champ dédié dans les données (ni Centipède ni RGP). Centipède :
+    une base du caster n'est servie dans la table que si elle est connectée (règle lue dans le code
+    du caster Millipede) ; les 26 bases fédérées RENAG restent « inconnues » ; une base déjà vue
+    puis absente apparaît « hors ligne, dernière vue le… » grâce à un historique local ; caster
+    injoignable = tous états « inconnus ». RGP : activité mesurée sur la publication du dernier
+    fichier horaire (`app.refstations.rgp_activity`) ; « inactif » inclut les nombreuses stations du
+    catalogue non diffusées publiquement, ce qui est précisé dans la fiche de l'antenne.
+  - **Étiquettes** avec le nom de chaque antenne sur la carte, anneau vert/rouge/blanc selon l'état,
+    colonne « État » et option « Exclure les antennes inactives du classement ».
+  - Cache Centipède ramené à 15 minutes (l'état doit rester frais).
+  - 26 tests pour le package `refstations`.
 
 ## [0.2.0] - 2026-09-15
 

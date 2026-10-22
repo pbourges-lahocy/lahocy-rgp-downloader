@@ -6,6 +6,7 @@ carte) et de lister les antennes les plus proches, tous réseaux sélectionnés 
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import html
 
@@ -32,14 +33,22 @@ from PySide6.QtWidgets import (
 from app.config.loader import AppConfig
 from app.geo.coordinates import InvalidCoordinatesError, wgs84_to_lambert93
 from app.refstations.geocoding import GeocodeResult
-from app.refstations.models import ReferenceStation
+from app.refstations.models import STATUS_OFFLINE, STATUS_ONLINE, STATUS_UNKNOWN, ReferenceStation
+from app.refstations.rgp_activity import ActivityResult, apply_rgp_activity
 from app.refstations.nearest import nearest_reference_stations
-from app.refstations.sources import available_sources
+from app.refstations.sources import RGP_SOURCE_ID, available_sources
 from app.ui.map_view import MapView
-from app.ui.workers import GeocodeWorker, ReferenceLoadWorker
+from app.ui.workers import GeocodeWorker, ReferenceLoadWorker, RgpActivityWorker
 
 _PALETTE = ["#1565c0", "#ef6c00", "#6a1b9a", "#2e7d32", "#00838f", "#ad1457"]
-_COLUMNS = ["Réseau", "Code", "Nom", "Distance", "Pays", "Constellations"]
+_COLUMNS = ["Réseau", "Code", "Nom", "Distance", "État", "Pays", "Constellations"]
+# état -> (libellé, couleur du texte dans le tableau sombre, couleur de l'anneau sur la carte,
+#          opacité du remplissage, couleur du texte dans la fiche blanche de la carte)
+_STATUS_STYLE = {
+    STATUS_ONLINE: ("Actif", "#66bb6a", "#2e7d32", 0.85, "#2e7d32"),
+    STATUS_OFFLINE: ("Inactif", "#ef5350", "#c62828", 0.3, "#c62828"),
+    STATUS_UNKNOWN: ("Inconnu", "#bdbdbd", "#ffffff", 0.85, "#616161"),
+}
 
 
 class ReferenceStationsTab(QWidget):
@@ -57,6 +66,8 @@ class ReferenceStationsTab(QWidget):
         self._shown_rows: list[ReferenceStation] = []
         self._started = False
         self._load_workers: dict[str, ReferenceLoadWorker] = {}
+        self._activity_worker: RgpActivityWorker | None = None
+        self._force_activity = False
         self._geocode_worker: GeocodeWorker | None = None
 
         self._build_ui()
@@ -97,8 +108,14 @@ class ReferenceStationsTab(QWidget):
             box.toggled.connect(self._on_sources_changed)
             self.source_checkboxes[source.id] = box
             layout.addWidget(box)
+        legend = QLabel(
+            "Anneau <b style='color:#2e7d32'>vert</b> : actif · <b style='color:#c62828'>rouge</b> : inactif · "
+            "<b>blanc</b> : état inconnu. Zoomez pour afficher les noms."
+        )
+        legend.setWordWrap(True)
+        layout.addWidget(legend)
         self.refresh_button = QPushButton("Actualiser les listes d'antennes")
-        self.refresh_button.clicked.connect(lambda: self._start_load(self._checked_source_ids(), force=True))
+        self.refresh_button.clicked.connect(self._on_refresh_clicked)
         layout.addWidget(self.refresh_button)
         return group
 
@@ -139,6 +156,10 @@ class ReferenceStationsTab(QWidget):
         row.addWidget(self.count_spin)
         row.addStretch(1)
         layout.addLayout(row)
+
+        self.exclude_inactive = QCheckBox("Exclure les antennes inactives du classement")
+        self.exclude_inactive.toggled.connect(lambda _c: self._refresh_view())
+        layout.addWidget(self.exclude_inactive)
 
         self.table = QTableWidget(0, len(_COLUMNS))
         self.table.setHorizontalHeaderLabels(_COLUMNS)
@@ -181,6 +202,10 @@ class ReferenceStationsTab(QWidget):
             self._started = True
             self._start_load(self._checked_source_ids(), force=False)
 
+    def _on_refresh_clicked(self) -> None:
+        self._force_activity = True
+        self._start_load(self._checked_source_ids(), force=True)
+
     def _checked_source_ids(self) -> list[str]:
         return [sid for sid, box in self.source_checkboxes.items() if box.isChecked()]
 
@@ -210,11 +235,50 @@ class ReferenceStationsTab(QWidget):
         self.refresh_button.setEnabled(not self._load_workers)
 
     def _on_source_loaded(self, source_id: str, stations: list, warnings: list) -> None:
+        if source_id == RGP_SOURCE_ID:
+            stations = [
+                dataclasses.replace(s, status_detail="Activité en cours de vérification...") for s in stations
+            ]
+            self._log(f"{self._names[source_id]} : {len(stations)} antennes (vérification de l'activité en cours).")
+        else:
+            counts = {st: sum(1 for s in stations if s.status == st) for st in _STATUS_STYLE}
+            self._log(
+                f"{self._names[source_id]} : {len(stations)} antennes — {counts[STATUS_ONLINE]} actives, "
+                f"{counts[STATUS_OFFLINE]} hors ligne, {counts[STATUS_UNKNOWN]} d'état inconnu."
+            )
         self._data[source_id] = stations
-        self._log(f"{self._names[source_id]} : {len(stations)} antennes.")
         for warning in warnings:
             self._log(warning, level="warn")
         self._refresh_view(fit_map=self._position is not None)
+        if source_id == RGP_SOURCE_ID:
+            self._start_activity()
+
+    def _start_activity(self) -> None:
+        if self._activity_worker is not None and self._activity_worker.isRunning():
+            return
+        codes = [s.code for s in self._data.get(RGP_SOURCE_ID, [])]
+        self.refresh_button.setEnabled(False)
+        self._activity_worker = RgpActivityWorker(self._config, codes, self._force_activity)
+        self._force_activity = False
+        self._activity_worker.done.connect(self._on_activity_done)
+        self._activity_worker.failed.connect(self._on_activity_failed)
+        self._activity_worker.finished.connect(lambda: self.refresh_button.setEnabled(not self._load_workers))
+        self._activity_worker.start()
+
+    def _on_activity_done(self, result: ActivityResult) -> None:
+        self._data[RGP_SOURCE_ID] = apply_rgp_activity(self._data.get(RGP_SOURCE_ID, []), result)
+        active = sum(1 for v in result.active.values() if v)
+        unchecked = len({s.code.lower() for s in self._data[RGP_SOURCE_ID]} - set(result.active))
+        span = f"{result.hour_utc.hour:02d}h–{(result.hour_utc.hour + 1) % 24:02d}h UTC"
+        self._log(
+            f"{self._names[RGP_SOURCE_ID]} : {active} stations ont publié l'heure {span}, "
+            f"{len(result.active) - active} sans données publiques"
+            + (f", {unchecked} non vérifiées." if unchecked else ".")
+        )
+        self._refresh_view(fit_map=False)
+
+    def _on_activity_failed(self, message: str) -> None:
+        self._log(message, level="error")
 
     def _on_source_failed(self, source_id: str, message: str) -> None:
         self._log(f"{self._names[source_id]} : chargement impossible — {message}", level="error")
@@ -287,15 +351,23 @@ class ReferenceStationsTab(QWidget):
         ]
         if station.constellations:
             parts.append(html.escape(station.constellations))
+        label, _table_color, _ring, _opacity, color = _STATUS_STYLE[station.status]
+        parts.append(
+            f"<b style='color:{color}'>{label}</b>"
+            + (f" — {html.escape(station.status_detail)}" if station.status_detail else "")
+        )
         if distance_km is not None:
             parts.append(f"Distance : {distance_km:.1f} km")
         return "<br>".join(parts)
 
     def _refresh_view(self, fit_map: bool = False) -> None:
         stations = self._visible_stations()
+        candidates = (
+            [s for s in stations if s.status != STATUS_OFFLINE] if self.exclude_inactive.isChecked() else stations
+        )
         nearest = (
-            nearest_reference_stations(stations, *self._position, self.count_spin.value())
-            if self._position is not None and stations
+            nearest_reference_stations(candidates, *self._position, self.count_spin.value())
+            if self._position is not None and candidates
             else []
         )
         nearest_keys = {rd.station.key: rd.distance_km for rd in nearest}
@@ -304,6 +376,8 @@ class ReferenceStationsTab(QWidget):
             {
                 "id": s.key, "lat": s.latitude, "lon": s.longitude, "color": self._colors[s.source_id],
                 "popup": self._popup(s, nearest_keys.get(s.key)), "highlight": s.key in nearest_keys,
+                "ring": _STATUS_STYLE[s.status][2], "fillOpacity": _STATUS_STYLE[s.status][3],
+                "label": html.escape(f"{s.code} · {s.name}" if s.name else s.code),
             }
             for s in stations
         ]
@@ -315,11 +389,18 @@ class ReferenceStationsTab(QWidget):
         self.table.setRowCount(len(nearest))
         for row, rd in enumerate(nearest):
             s = rd.station
-            cells = [self._names[s.source_id], s.code, s.name or "—", f"{rd.distance_km:.1f} km", s.country, s.constellations]
+            status_label, status_color, _ring, _opacity, _popup_color = _STATUS_STYLE[s.status]
+            cells = [
+                self._names[s.source_id], s.code, s.name or "—", f"{rd.distance_km:.1f} km",
+                status_label, s.country, s.constellations,
+            ]
             for col, text in enumerate(cells):
                 item = QTableWidgetItem(text)
                 if col == 0:
                     item.setForeground(QColor(self._colors[s.source_id]))
+                elif col == 4:
+                    item.setForeground(QColor(status_color))
+                    item.setToolTip(s.status_detail)
                 self.table.setItem(row, col, item)
         self.table.blockSignals(False)
 

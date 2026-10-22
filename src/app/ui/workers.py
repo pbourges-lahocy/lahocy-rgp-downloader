@@ -26,6 +26,7 @@ from app.rgp.provider_ign import IgnProviderIGN
 from app.rgp.report import ChantierInfo, StationReportEntry, build_report
 from app.refstations.geocoding import GeocodeResult, GeocodingError, geocode
 from app.refstations.ntrip import NtripError, load_ntrip_stations
+from app.refstations.rgp_activity import ActivityResult, load_rgp_activity
 from app.refstations.sources import RGP_SOURCE_ID, rgp_reference_stations
 from app.rgp.stations import Station, find_nearest
 from app.utils.http_client import IgnServerUnavailableError, RgpHttpClient
@@ -269,13 +270,40 @@ class ReferenceLoadWorker(QThread):
                 caster = next(c for c in self._config.reference.ntrip_casters if c.id == self._source_id)
                 result = load_ntrip_stations(
                     client, caster, self._config.cache_dir,
-                    self._config.reference.ntrip_cache_ttl_days, force_refresh=self._force_refresh,
+                    self._config.reference.ntrip_cache_ttl_minutes,
+                    self._config.reference.offline_retention_days, force_refresh=self._force_refresh,
                 )
                 self.loaded.emit(self._source_id, result.stations, result.warnings)
         except (IgnServerUnavailableError, NtripError) as exc:
             self.failed.emit(self._source_id, str(exc))
         except Exception as exc:  # noqa: BLE001
             self.failed.emit(self._source_id, f"Erreur inattendue : {exc}")
+
+
+class RgpActivityWorker(QThread):
+    """Mesure l'activité des stations RGP (~770 requêtes HEAD, ~10 s) sans bloquer l'affichage."""
+
+    done = Signal(object)  # ActivityResult
+    failed = Signal(str)
+
+    def __init__(self, config: AppConfig, codes: list[str], force_refresh: bool, parent=None) -> None:
+        super().__init__(parent)
+        self._config = config
+        self._codes = codes
+        self._force_refresh = force_refresh
+
+    def run(self) -> None:
+        try:
+            with make_client(self._config) as client:
+                result: ActivityResult = load_rgp_activity(
+                    client, make_provider(self._config), self._codes, self._config.cache_dir,
+                    self._config.reference.rgp_activity_cache_minutes,
+                    tuple(sorted(self._config.ign.cadences, reverse=True)),  # 30 s d'abord : la plus courante
+                    force_refresh=self._force_refresh,
+                )
+            self.done.emit(result)
+        except Exception as exc:  # noqa: BLE001
+            self.failed.emit(f"Vérification de l'activité RGP impossible : {exc}")
 
 
 class GeocodeWorker(QThread):

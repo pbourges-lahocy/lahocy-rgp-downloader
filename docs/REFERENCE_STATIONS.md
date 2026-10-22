@@ -41,10 +41,49 @@ Géocodeur IGN Géoplateforme (données BAN) :
 coordonnées `[lon, lat]` WGS84, `properties.label` et `properties.score`. URL configurable.
 Exemple : « 12 rue de Paris, Rennes » → 48.112112, -1.669676 (score 0.98).
 
+## Antenne active ou non ?
+
+### Centipède : pas de champ dédié, mais une règle établie dans le code du caster
+
+La table des mounts ne contient **aucun champ « actif »** (vérifié sur les 1304 lignes : `solution`
+vaut 0 partout, le débit est constant — 15200 ou 8000). En revanche le caster est le logiciel libre
+**Millipede** (`github.com/pbeyssac/millipede-caster`) et son code (`caster/sourcetable.c`) montre que,
+pour les bases du caster lui-même, **une entrée n'est servie que si la base est connectée**
+(`livesource_exists`). Cette règle ne vaut pas pour les entrées importées d'autres casters.
+Sur la table réelle la séparation est nette :
+
+| Type | Nombre | Signature dans la table | État affiché |
+|---|---|---|---|
+| Natif Centipède | 1278 | authentification `N`, réseau `NONE` | **Actif** s'il est listé |
+| Fédéré RENAG | 26 | authentification `B`, réseau `RENAG` | **Inconnu** (rien ne garantit qu'il est connecté) |
+
+La table ne liste que les bases connectées : elle ne dit donc jamais *quelles* bases sont absentes.
+L'appli garde un **historique local** (`ntrip_<id>_sourcetable.json`) : une base native déjà vue
+mais plus listée est affichée **Inactif / « dernière vue le … »** pendant `offline_retention_days`
+(90 j). Limite assumée : au premier lancement l'historique est vide, aucune base n'est encore
+« hors ligne » ; il se remplit au fil des utilisations. Si le caster est injoignable, la dernière
+liste est affichée avec **tous les états à « Inconnu »** et un avertissement (on ne prétend rien).
+La table est relue au plus toutes les `ntrip_cache_ttl_minutes` (15 min).
+
+### RGP : mesuré sur les fichiers réellement publiés
+
+L'IGN ne fournit aucun champ « actif ». Une station est **Active** si son fichier horaire le plus
+récent est publié sur `rgpdata.ign.fr` : l'heure H–H+1 est publiée vers H+1h03 (observé en Phase 1),
+on teste donc l'heure la plus récente terminée depuis au moins 90 minutes (cadence 30 s, sinon 1 s),
+soit ~770 requêtes HEAD en parallèle (~8 s), mises en cache 30 minutes.
+
+Mesure du 2026-10-22 (08h48 UTC) sur 762 codes du catalogue : 461 actives, 301 sans données
+publiques. **Inactif ne veut pas dire « en panne »** : sur 762 stations du catalogue, 294 n'avaient
+rien publié la veille, et sur 6 dates échantillonnées (de J-1 à J-730) seules 20 à 58 d'entre elles
+apparaissent dans les données publiques — ce sont donc surtout des stations **non diffusées
+publiquement**, que la requête ne permet pas de distinguer d'une station arrêtée ou en retard. Exemple :
+à Agen, `AGEN` est inactive (absente des 6 dates échantillonnées) alors que `AGN2` est active. Pour un
+téléchargement RINEX c'est l'information utile : sans fichier public, la station est inutilisable.
+Serveur IGN injoignable pour une station : état **Inconnu**, jamais « Inactif ».
+
 ## Limites connues
 
 - Les positions sont celles déclarées par chaque réseau (précision décimétrique à métrique selon
   la source) : suffisant pour choisir une antenne, pas pour du positionnement.
-- Être listée dans la table des mounts **n'est pas vérifié comme garantissant qu'une base émet
-  réellement des corrections en ce moment** : l'appli ne teste pas l'état en direct d'une base
-  (non vérifié sur ce caster). Pour un usage terrain, contrôler l'état sur la carte du réseau.
+- « Actif » signifie « présente dans la table du caster » (Centipède) ou « a publié l'heure de
+  référence » (RGP) : ce n'est pas un test de la qualité des corrections reçues.
